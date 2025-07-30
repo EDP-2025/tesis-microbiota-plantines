@@ -23,7 +23,7 @@ Se incluyen dos estudios principales:
 │   └── microbiota.Rmd                ← Análisis y resultados microbiota  
 └── plantines/  
     ├── plantines.Rmd                 ← Script principal de modelado de crecimiento  
-    ├── variables_ambientales_acumuladas.Rmd  ← Lee el Excel `RedMeteo.xlsx` con datos ambientales y genera `env_acumulado_plantas.xlsx`, con las variables acumuladas para                                                   fechas de interés.  
+    ├── variables_ambientales_acumuladas.Rmd  ← Lee el Excel `RedMeteo.xlsx` con datos ambientales y genera `env_acumulado_plantas.xlsx`, con las variables acumuladas para       │                                           fechas de interés.  
     ├── Medicion_plantines.xlsx       ← Mediciones de altura y DAC de los plantines  
     └── env_acumulado_plantas.xlsx    ← Salida de `variables_ambientales_acumuladas.Rmd`, usada dentro de `plantines.Rmd` para incorporar covariables ambientales
 
