@@ -31,7 +31,7 @@ tesis-microbiota-plantines/
     ├── Medicion_plantines.xlsx       ← Mediciones de altura y DAC de los plantines
     └── env_acumulado_plantas.xlsx    ← Salida de `variables_ambientales_acumuladas.Rmd`,
         usada en `plantines.Rmd` para incorporar covariables ambientales
-
+```
 ---
 ## Detalles carpeta `plantines/`
 
