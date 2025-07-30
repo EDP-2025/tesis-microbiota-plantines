@@ -25,12 +25,11 @@ tesis-microbiota-plantines/
 │   └── microbiota.Rmd                ← Análisis y resultados microbiota
 └── plantines/
     ├── plantines.Rmd                 ← Script principal de modelado de crecimiento
-    ├── variables_ambientales_acumuladas.Rmd
-    │   → Lee `RedMeteo.xlsx` (datos ambientales)
-    │     y genera `env_acumulado_plantas.xlsx`
+    ├── variables_ambientales_acumuladas.Rmd    → Lee `RedMeteo.xlsx` (datos ambientales)
+    │                                             y genera `env_acumulado_plantas.xlsx`
     ├── Medicion_plantines.xlsx       ← Mediciones de altura y DAC de los plantines
     └── env_acumulado_plantas.xlsx    ← Salida de `variables_ambientales_acumuladas.Rmd`,
-        usada en `plantines.Rmd` para incorporar covariables ambientales
+                                        usada en `plantines.Rmd` para incorporar covariables ambientales
 ```
 ---
 ## Detalles carpeta `plantines/`
