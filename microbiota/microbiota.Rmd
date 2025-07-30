@@ -1,0 +1,417 @@
+---
+title: "microbiota"
+output: pdf_document
+date: "2025-07-16"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+install.packages("devtools")
+```
+```{r}
+devtools::install_github("nyiuab/NBZIMM")
+```
+
+
+
+```{r}
+library(NBZIMM)
+data(Romero)
+names(Romero)
+```
+
+```{r}
+otu = Romero$OTU; dim(otu)
+```
+
+```{r}
+sam = Romero$SampleData; dim(sam)
+```
+
+```{r}
+colnames(sam)
+```
+
+```{r}
+N = sam[, "Total.Read.Counts"]
+Days = sam$GA_Days; Days = scale(Days)
+Age = sam$Age; Age = scale(Age)
+Race = sam$Race
+preg = sam$pregnant; table(preg)
+```
+
+```{r}
+subject = sam[, "Subect_ID"]; table(subject)
+```
+
+```{r}
+y = otu[, 1]
+```
+
+```{r}
+# Instalar y cargar las librerías necesarias
+library(dplyr)
+
+# Contar las observaciones por cada mujer usando su ID
+observaciones_por_mujer <- sam %>%
+group_by(Subect_ID) %>%
+summarise(Conteo_Observaciones = n())
+# Mostrar los resultados
+print(observaciones_por_mujer)
+```
+
+```{r}
+#Codigo 1:
+# Mostrar los nombres de todas las bacterias presentes en el conjunto de datos OTU
+bacterias <- colnames(otu)
+print(bacterias)
+```
+
+```{r}
+# Si quieres visualizar la lista más ordenada, puedes usar esto
+cat("Bacterias estudiadas:\n")
+cat(paste(bacterias, collapse = "\n"))
+```
+
+```{r}
+# Extraer todas las mujeres estudiadas
+mujeres <- unique(sam[, c("Subect_ID", "pregnant")])
+# Mostrar la cantidad total de mujeres estudiadas
+cat("Total de mujeres estudiadas:", nrow(mujeres), "\n")
+```
+
+```{r}
+# Contar cuántas son embarazadas y cuántas no
+tabla_embarazo <- table(mujeres$pregnant)
+cat("Cantidad de mujeres embarazadas:", tabla_embarazo["1"], "\n")
+```
+
+```{r}
+cat("Cantidad de mujeres no embarazadas:", tabla_embarazo["0"], "\n")
+```
+
+```{r}
+# Mostrar la tabla completa
+print(tabla_embarazo)
+```
+
+```{r}
+# Ver todas las covariables presentes en la tabla 'sam'
+covariables <- colnames(sam)
+print("Covariables presentes en el estudio:")
+
+print(covariables)
+```
+
+```{r}
+# Si prefieres una salida más ordenada
+cat("Covariables presentes en el estudio:\n")
+
+cat(paste(covariables, collapse = "\n"))
+
+
+```
+
+```{r}
+# Cargar librería necesaria
+library(glmmTMB)
+# Crear vectores para almacenar resultados
+bacterias_significativas_NBMM <- c()
+p_valores_interaccion <- c()
+# Bucle para iterar sobre cada bacteria (columna en la matriz otu)
+for (k in 1:ncol(otu)) {
+  # Extraer la bacteria k
+  y <- otu[, k]
+  # Saltar bacterias con poca variabilidad
+  if (var(y) == 0) next
+  # Ajustar el modelo NBMM con interacción
+  modelo <- tryCatch(
+    {
+      glmmTMB(
+        y ~ preg * Days + (1 | subject), # Incluye efectos principales e interacción
+        family = nbinom2(),
+        data = sam
+        )
+      },
+    error = function(e) NULL # Manejo de errores si el modelo no converge
+    )
+  # Continuar solo si el modelo se ajustó correctamente
+  if (!is.null(modelo)) {
+    # Extraer los valores p asociados a `preg`, `Days` y `preg:Days`
+    resumen <- summary(modelo)
+    p_valores <- coef(resumen)$cond[, "Pr(>|z|)"]
+    # Evaluar la significancia de la interacción
+    if (!is.na(p_valores["preg:Days"]) && p_valores["preg:Days"] < 0.05) {
+      bacterias_significativas_NBMM <- c(bacterias_significativas_NBMM, colnames(otu)[k])
+      p_valores_interaccion <- c(p_valores_interaccion, p_valores["preg:Days"])
+    }
+  }
+  }
+```
+
+```{r}
+# Aplicar corrección por pruebas múltiples (opcional)
+if (length(p_valores_interaccion) > 0) {
+  p_valores_interaccion_ajustados <- p.adjust(p_valores_interaccion, method = "fdr")
+  } else {
+    p_valores_interaccion_ajustados <- NULL
+    }
+# Mostrar bacterias significativas
+cat("Bacterias significativamente afectadas por la interacción (NBMM):\n")
+
+print(bacterias_significativas_NBMM)
+```
+
+```{r}
+# Mostrar valores p ajustados
+cat("Valores p ajustados:\n")
+
+print(p_valores_interaccion_ajustados)
+```
+
+```{r}
+# Cargar librería necesaria
+library(glmmTMB)
+# Crear vectores para almacenar resultados
+bacterias_significativas_ZINBMM <- c()
+p_valores_interaccion <- c()
+# Bucle para iterar sobre cada bacteria (columna en la matriz otu)
+for (k in 1:ncol(otu)) {
+  # Extraer la bacteria k
+  y <- otu[, k]
+  # Saltar bacterias con poca variabilidad
+  if (var(y) == 0) next
+  # Ajustar el modelo ZINBMM con interacción
+  modelo <- tryCatch(
+    {
+      glmmTMB(
+        y ~ preg * Days + (1 | subject), # Modelo condicional
+        ziformula = ~ preg + Days, # Modelo de inflación de ceros (opcional)
+        family = nbinom2(), # Distribución binomial negativa
+        data = sam
+        )
+      },
+    error = function(e) NULL # Manejo de errores si el modelo no converge
+    )
+  # Continuar solo si el modelo se ajustó correctamente
+  if (!is.null(modelo)) {
+    # Extraer los valores p asociados a `preg`, `Days` y `preg:Days`
+    resumen <- summary(modelo)
+    p_valores <- coef(resumen)$cond[, "Pr(>|z|)"]
+    # Evaluar la significancia de la interacción
+    if (!is.na(p_valores["preg:Days"]) && p_valores["preg:Days"] < 0.05) {
+      bacterias_significativas_ZINBMM <- c(bacterias_significativas_ZINBMM,
+                                           colnames(otu)[k])
+      p_valores_interaccion <- c(p_valores_interaccion, p_valores["preg:Days"])
+    }
+  }
+  }
+```
+
+```{r}
+# Aplicar corrección por pruebas múltiples (opcional)
+if (length(p_valores_interaccion) > 0) {
+  p_valores_interaccion_ajustados <- p.adjust(p_valores_interaccion, method = "fdr")
+  } else {
+    p_valores_interaccion_ajustados <- NULL
+    }
+# Mostrar bacterias significativas
+cat("Bacterias significativamente afectadas por la interacción (ZINBMM):\n")
+
+print(bacterias_significativas_ZINBMM)
+```
+
+```{r}
+# Mostrar valores p ajustados
+cat("Valores p ajustados:\n")
+
+print(p_valores_interaccion_ajustados)
+
+
+```
+
+```{r}
+# Filtrar las bacterias significativas
+otu_significativas_NBMM <- otu[, bacterias_significativas_NBMM]
+# Separar datos entre embarazadas y no embarazadas
+otu_embarazadas_NBMM <- otu_significativas_NBMM[sam$preg == "1", ] # Embarazadas (1)
+otu_no_embarazadas_NBMM <- otu_significativas_NBMM[sam$preg == "0", ] # No embarazadas (0)
+# Calcular la abundancia promedio para cada grupo
+promedios_embarazadas_NBMM <- colMeans(otu_embarazadas_NBMM, na.rm = TRUE)
+promedios_no_embarazadas_NBMM <- colMeans(otu_no_embarazadas_NBMM, na.rm = TRUE)
+# Crear un data.frame para facilitar la visualización
+df_abundancia <- data.frame(
+Bacteria = bacterias_significativas_NBMM,
+Embarazadas = promedios_embarazadas_NBMM,
+No_Embarazadas = promedios_no_embarazadas_NBMM
+)
+```
+
+```{r}
+library(reshape2)
+# Visualizar los datos
+library(ggplot2)
+# Convertir a formato largo para ggplot
+df_largo <- reshape2::melt(df_abundancia, id.vars = "Bacteria", variable.name = "Estado", value.name = "Abundancia")
+# Crear un gráfico de barras para comparar abundancias
+ggplot(df_largo, aes(x = Bacteria, y = Abundancia, fill = Estado)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Abundancia de bacterias significativas por estado de embarazo (NBMM)",
+       x = "Bacterias",
+       y = "Abundancia promedio",
+       fill = "Estado") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+# Filtrar los datos para la bacteria "Lactobacillus"
+otu_mycoplasma <- data.frame(
+  Abundancia = otu[, "Proteobacteria"],
+  Estado = as.factor(sam$preg)
+  )
+# Crear el boxplot
+library(ggplot2)
+ggplot(otu_mycoplasma, aes(x = Estado, y = Abundancia, fill = Estado)) +
+  geom_boxplot(outlier.colour = "red", outlier.size = 2, notch = TRUE) +
+  labs(title = "Distribución de abundancia de 'Proteobacteria' por estado de embarazo",
+       x = "Estado de embarazo",
+       y = "Abundancia",
+       fill = "Estado") +
+  scale_x_discrete(labels = c("0" = "No Embarazada", "1" = "Embarazada")) +
+  theme_minimal()
+```
+
+```{r}
+# Filtrar las bacterias significativas identificadas por ZINBMM
+otu_significativas_zinbmm <- otu[, bacterias_significativas_ZINBMM]
+# Añadir la variable `Estado` (embarazada o no) al conjunto de datos
+otu_significativas_zinbmm$Estado <- as.factor(sam$preg)
+# Calcular la abundancia promedio por estado para cada bacteria significativa
+library(reshape2)
+df_largo <- melt(otu_significativas_zinbmm, id.vars = "Estado",
+                 variable.name = "Bacteria",
+                 value.name = "Abundancia")
+# Calcular promedios por estado y bacteria
+promedios <- aggregate(Abundancia ~ Bacteria + Estado, data = df_largo, mean)
+# Crear el gráfico de barras
+library(ggplot2)
+ggplot(promedios, aes(x = Bacteria, y = Abundancia, fill = Estado)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Abundancia promedio de bacterias significativas por estado de embarazo",
+       x = "Bacterias",
+       y = "Abundancia promedio",
+       fill = "Estado") +
+  scale_x_discrete(labels = function(x) stringr::str_wrap(x, width = 10)) + # Ajustar nombres largos
+  scale_fill_manual(values = c("0" = "blue", "1" = "green"), 
+                  labels = c("0" = "No Embarazada", "1" = "Embarazada")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+```{r}
+# Seleccionar la bacteria significativa "Proteobacteria"
+bacteria_especifica <- "Proteobacteria"
+# Filtrar los datos para la bacteria seleccionada
+otu_lactobacillus <- data.frame(
+  Abundancia = otu[, bacteria_especifica],
+  Estado = as.factor(sam$preg)
+  )
+# Crear el boxplot
+library(ggplot2)
+ggplot(otu_lactobacillus, aes(x = Estado, y = Abundancia, fill = Estado)) +
+  geom_boxplot(outlier.colour = "red", outlier.size = 2, notch = TRUE) +
+  labs(title = paste("Distribución de abundancia de", bacteria_especifica, "por estado de embarazo"),
+       x = "Estado de embarazo",
+       y = "Abundancia",
+       fill = "Estado") +
+  scale_x_discrete(labels = c("0" = "No Embarazada", "1" = "Embarazada")) +
+  scale_fill_manual(values = c("0" = "blue", "1" = "green"),
+                    labels = c("0" = "No Embarazada", "1" = "Embarazada")) +
+  theme_minimal()
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# Seleccionar las bacterias ZINBMM
+bacterias_seleccionadas <- bacterias_significativas_NBMM
+# Crear una matriz con la abundancia de las bacterias seleccionadas
+abundancia_bacterias <- otu[, bacterias_seleccionadas]
+colnames(abundancia_bacterias) <- bacterias_seleccionadas
+# Añadir al dataset `sam` las columnas de abundancia seleccionadas
+sam_bacterias <- cbind(sam, abundancia_bacterias)
+# Reestructurar los datos para un formato largo adecuado para un mapa de calor
+sam_long <- sam_bacterias %>%
+pivot_longer(cols = all_of(bacterias_seleccionadas), 
+             names_to = "Bacteria",
+             values_to = "Abundancia")
+
+# Crear el mapa de calor
+ggplot(sam_long, aes(x = GA_Days, y = Bacteria, fill = Abundancia)) +
+  geom_tile(color = "pink") + # Crear celdas del mapa de calor
+  facet_wrap(~ as.factor(pregnant), scales = "free_x") + # Facetas por estado de embarazo
+  scale_fill_gradient(low = "pink", high = "red") + # Gradiente de colores
+  labs(
+    title = "Mapa de Calor de Abundancia Bacteriana",
+    x = "Días de Gestación (GA_Days)",
+    y = "Bacteria",
+    fill = "Abundancia"
+    ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    strip.text = element_text(size = 12, face = "bold")
+    )
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+
+# Seleccionar las bacterias ZINBMM
+bacterias_seleccionadas <- bacterias_significativas_ZINBMM
+# Crear una matriz con la abundancia de las bacterias seleccionadas
+abundancia_bacterias <- otu[, bacterias_seleccionadas]
+colnames(abundancia_bacterias) <- bacterias_seleccionadas
+# Añadir al dataset `sam` las columnas de abundancia seleccionadas
+sam_bacterias <- cbind(sam, abundancia_bacterias)
+# Reestructurar los datos para un formato largo adecuado para un mapa de calor
+sam_long <- sam_bacterias %>%
+  pivot_longer(cols = all_of(bacterias_seleccionadas),
+               names_to = "Bacteria",
+               values_to = "Abundancia")
+
+# Crear el mapa de calor
+ggplot(sam_long, aes(x = GA_Days, y = Bacteria, fill = Abundancia)) +
+  geom_tile(color = "pink") + # Crear celdas del mapa de calor
+  facet_wrap(~ as.factor(pregnant), scales = "free_x") + # Facetas por estado de embarazo
+  scale_fill_gradient(low = "pink", high = "red") + # Gradiente de colores
+  labs(
+    title = "Mapa de Calor de Abundancia Bacteriana",
+    x = "Días de Gestación (GA_Days)",
+    y = "Bacteria",
+    fill = "Abundancia"
+    ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    strip.text = element_text(size = 12, face = "bold")
+    )
+```
+
+
+
+
+
+
+
+
+
+
